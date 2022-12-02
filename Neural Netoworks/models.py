@@ -79,37 +79,46 @@ class BiLSTM(NeuralModels):
     def predict(self, xtest):
         return self.model.predict(xtest)
 
-class LSTM_Attention(NeuralModels):
+class LsTM_Attention(NeuralModels):
     def __init__(self, emb_mat, vocab_size = -1, loss = "binary_crossentropy", epochs = 10, optimizer = "adam", metrics = ["accuracy"]):
         super().__init__(emb_mat, vocab_size, loss, epochs, optimizer, metrics)
     
     def train_model(self):
-        inp1 = Input(shape = (30,))
-        inp2 = Input(shape = (30,))
-        emb1 = Embedding(output_dim=300, weights = [self.embedding_matrix], trainable = False, input_dim=self.vocab_size, input_length=30)(inp1)
-        emb2 = Embedding(output_dim=300, weights = [self.embedding_matrix], trainable = False, input_dim=self.vocab_size, input_length=30)(inp2)
-        concat = Concatenate(axis = -1)([emb1 + emb2, emb1 - emb2, emb1 * emb2])
-        lstm = tf.keras.layers.LSTM(150, return_sequences=True, dropout=0.1, return_state=True, kernel_regularizer=tf.keras.regularizers.l2(0.01))(concat)
-        attention = tf.keras.layers.Attention()([lstm[0], lstm[0]])
-        out = Dense(2, activation = "softmax")(attention)
+        inp1 = Input(shape = (128,))
+        inp2 = Input(shape = (128,))
+        emb1 = Embedding(output_dim=300, weights = [self.embedding_matrix], trainable = False, input_dim=self.vocab_size, input_length=128)(inp1)
+        emb2 = Embedding(output_dim=300, weights = [self.embedding_matrix], trainable = False, input_dim=self.vocab_size, input_length=128)(inp2)
+        
+        lstm1 = LSTM(150, return_sequences=True, dropout=0.1, return_state=True)(emb1)
+        lstm2 = LSTM(150, return_sequences=True, dropout=0.1, return_state=True)(emb2)
+
+        attention = dot([lstm1[0], lstm2[0]], axes=[2, 2])
+        u_norm = Softmax(axis=-1)(attention)
+        v_norm = Softmax(axis=1)(attention)
+
+
+        u = dot([u_norm, lstm1[0]], axes=[1, 1])
+        v = dot([v_norm, lstm2[0]], axes=[1, 1])
+
+        WU_bar = Dense(150)(u[:, -1, :])
+        WV_bar = Dense(150)(v[:, -1, :])
+        VU = Dense(150)(lstm1[0][:, -1, :])
+        VV = Dense(150)(lstm2[0][:, -1, :])
+
+        ufinal = Add()([WU_bar, VU])
+        vfinal = Add()([WV_bar, VV])
+
+        ufinal = Activation('tanh')(ufinal)
+        vfinal = Activation('tanh')(vfinal)
+        
+        concat = Concatenate(axis = -1)([ufinal, vfinal])
+        out = Dense(2, activation = "softmax")(concat)
         self.model = Model(inputs = [inp1, inp2], outputs = out)
         self.model.compile(loss = self.loss, optimizer = self.optimizer, metrics = self.metrics)
+
 
     def get_model_summary(self):
         self.model.summary()
     
     def predict(self, xtest):
         return self.model.predict(xtest)
-
-def BiLSTM_Attention(emb_mat, vocab_size = -1, loss = "binary_crossentropy", epochs = 10, optimizer = "adam", metrics = ["accuracy"]):
-    inp1 = Input(shape = (30,))
-    inp2 = Input(shape = (30,))
-    emb1 = Embedding(output_dim=300, weights = [emb_mat], trainable = False, input_dim=vocab_size, input_length=30)(inp1)
-    emb2 = Embedding(output_dim=300, weights = [emb_mat], trainable = False, input_dim=vocab_size, input_length=30)(inp2)
-    concat = Concatenate(axis = -1)([emb1 + emb2, emb1 - emb2, emb1 * emb2])
-    bilstm = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(150, return_sequences=True, dropout=0.1, return_state=True, kernel_regularizer=tf.keras.regularizers.l2(0.01)))(concat)
-    attention = tf.keras.layers.Attention()([bilstm[0], bilstm[0]])
-    out = Dense(2, activation = "softmax")(attention)
-    model = Model(inputs = [inp1, inp2], outputs = out)
-    model.compile(loss = loss, optimizer = optimizer, metrics = metrics)
-    return model
