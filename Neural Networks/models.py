@@ -28,7 +28,6 @@ class CBOW(NeuralModels):
         self.model.add(Dropout(0.1))
         self.model.add(Dense(2, activation = "softmax"))
         self.model.compile(loss = self.loss, optimizer = self.optimizer, metrics = self.metrics)
-        self.model.fit(xtrain, ytrain, epochs = self.epochs, validation_data = (xval, yval), batch_size = 64, verbose = 1)
 
     def get_model_summary(self):
         self.model.summary()
@@ -46,10 +45,10 @@ class LsTM(NeuralModels):
         emb1 = Embedding(output_dim=300, weights = [self.embedding_matrix], trainable = False, input_dim=self.vocab_size, input_length=128)(inp1)
         emb2 = Embedding(output_dim=300, weights = [self.embedding_matrix], trainable = False, input_dim=self.vocab_size, input_length=128)(inp2)
         concat = Concatenate(axis = -1)([emb1 + emb2, emb1 - emb2, emb1 * emb2])
-        lstm = LSTM(150, return_sequences=False, dropout=0.2, return_state=True)(concat)
+        lstm = LSTM(150, return_sequences=False, dropout=0.1, return_state=True)(concat)
         out = Dense(2, activation = "softmax")(lstm[2])
         self.model = Model(inputs = [inp1, inp2], outputs = out)
-        self.model.compile(loss = self.loss, optimizer = adam_v2.Adam(learning_rate=0.0008), metrics = self.metrics)
+        self.model.compile(loss = self.loss, optimizer = self.optimizer, metrics = self.metrics)
 
     def get_model_summary(self):
         self.model.summary()
